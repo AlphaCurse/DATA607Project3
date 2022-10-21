@@ -136,7 +136,6 @@ any(any_missing)  # No missing value in ff_non_na
 rm(list = c('i', 'any_missing'))
 
 # It occurs to me that it would be very helpful for analysis if I provide an organized final schema containing the 35 chosen questions in the correct order, so I will do that now
-
 schema_ff_filtered <- schema_ff_filtered[schema_ff_filtered$Column %in% names(ff_non_na), ]
 all(schema_ff_filtered$Column == names(ff_non_na))  # Schema matches list
 ```
