@@ -1,0 +1,139 @@
+---
+title: "Project 3 | Cleaning 'freeformResponses.csv'"
+author: "Prinon Mahdi"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+```
+
+# Introduction
+
+First, let's summarize the dataset in one sentence: It is a Kaggle survey from 2017 that collected data from Kaggle users on their thoughts about machine learning and data science.
+
+According to the instructions for this project, the goal is to answer this question: **Which are the most valued data science skills?**
+
+Let's read in the data: 
+
+```{r}
+schema <- read_csv('project-3-kaggle/schema.csv')
+mcq <- read_csv('project-3-kaggle/multipleChoiceResponses.csv')
+ff <- read_csv('project-3-kaggle/freeformResponses.csv')
+```
+
+# Problem 1: Figuring out the questions that correspond to the columns in `ff`
+
+I want to ensure that the number of questions from `mcq` and `ff` add up to all the questions listed in schema. 
+
+```{r}
+ff_colnames <- colnames(ff)
+mcq_colnames <- colnames(mcq)
+length(ff_colnames) + length(mcq_colnames) == nrow(schema)
+```
+
+I have confirmed that all the questions from both `mcq` and `ff` are enumerated in `schema`. However, at first glance, it does not appear to be the case that there is a clear way to identify which questions belong to `mcq` and which ones belong to `ff`. I would very much like to do an eyeball test of all the questions in `ff` to get a sense of what I need to think about in filtering out the questions irrelevant to data science skills.
+
+To isolate the questions that correspond to `ff` columns, I will just use a logical test to subset out those questions in `schema`. I will save those questions to `schema_ff`.
+
+```{r}
+schema_ff <- schema[schema$Column %in% ff_colnames, ]
+nrow(schema_ff) == ncol(ff)  # Just checking that I got all the columns of ff
+```
+
+Looking at the questions in `schema_ff`, it turns out there **is** a way to tell if a question belongs in the `ff` dataframe. Column names of `ff` end in the characters "FreeForm", so regex was an alternative option for isolating `ff` questions. Regardless, the task has been accomplished, and now looking at the questions, it seems clear that the free form questions are complementary to the multiple choice questions. In other words, I suspect they were asked to collect follow-up information on certain multiple choice questions. Let's see if this assumption is accurate.
+
+# Problem 2: Are free form questions paired always paired with multiple choice questions?
+
+My plan is to strip away the characters 'FreeForm' from `schema_ff$Column` values and convert them to lowercase so that a check can be performed to see how many of those values appear in the lowercase column names of `mcq`.
+
+```{r}
+ff_colnames_modified <- tolower(
+  str_match(string = schema_ff$Column, 
+          pattern = '(.*)[Ff]ree[Ff]orm')[, 2]
+)
+sum(ff_colnames_modified %in% tolower(mcq_colnames))
+```
+
+Given that only 15 matches are found, perhaps I was too hasty in assuming each free form question corresponds to a multiple choice question. There is only some correspondence.
+
+I feel the next filtering step should be done based on the value in `schema_ff$Asked`. To elaborate, some questions were asked based on the employment status of the respondent. And this information regarding selective questioning is stored in `schema_ff$Asked`. So, I want to select only those questions that were asked to data science professionals and data science learners. It is likely the respondents of these groups will be able to shed some light on the most important data science skills. 
+
+# Problem 3: Excluding questions asked to people not in the data science professional or learner groups
+
+```{r}
+unique(schema_ff$Asked)
+mask = schema_ff$Asked %in% c('All', 'Learners', 'OnlineLearners', 'CodingWorker-NC', 'CodingWorker')
+schema_ff_filtered <- schema_ff[mask, ]
+```
+
+Turns out this process only knocked off 3 columns. Now, I will use regex to sort through the questions further and identify the ones containing certain strings: 'skill', 'abilit', 'competen', 'experience', 'expert', 'job', 'employ', 'proficien', 'aptitude', 'profession', 'business', 'career', 'field', 'work', 'occupation', 'role', 'special', 'position', 'office', 'post', 'service'.
+
+# Problem 4: Filtering the questions from `schema_ff_filtered` further
+
+I will save to a vector the values in `schema_ff_filtered$Column` that correspond to the questions containing the strings of interest. Then, I will use that vector to subset `ff` so that a dataframe is obtained that contains only the columns that correspond to relevant "data science skill" related questions.
+
+```{r}
+strings_of_interest <- c('.*skill.*', '.*abilit.*', '.*competen.*', '.*experience.*', '.*expert.*', '.*job.*', '.*employ.*', '.*proficien.*', '.*aptitude.*', '.*profession.*', '.*business.*', '.*career.*', '.*field.*', '.*work.*', '.*occupation.*', '.*role.*', '.*special.*', '.*position.*', '.*office.*', '.*post.*', '.*service.*', '.*tool.*', '.*tech.*', '.*language.*', '.*method.*')
+
+filtered_questions <- character()
+
+for (i in strings_of_interest) {
+  filtered_questions <- append(
+    filtered_questions, 
+    na.omit(str_extract(schema_ff_filtered$Question, pattern = i))
+  )
+}
+
+filtered_questions <- unique(filtered_questions)
+
+# Now, I will just find the corresponding column names for each question so that I can subset those columns from ff
+final_cols <- schema_ff_filtered[
+  schema_ff_filtered$Question %in% filtered_questions, 
+  "Column"] [[1]]
+ff_filtered <- ff[, final_cols]
+
+# I am modifying schema_ff_filtered to only contain the final choice of questions
+schema_ff_filtered <- schema_ff_filtered[schema_ff_filtered$Question %in% filtered_questions, ]
+
+# Removing the objects that are no longer necessary so that the environment is not so cluttered
+rm(list = c('mcq', 'schema_ff', 'ff_colnames', 'ff_colnames_modified', 'final_cols', 'i', 'mask', 'mcq_colnames', 'strings_of_interest'))
+```
+
+`ff_filtered` is the final dataframe obtained for free-form responses: It contains only 46 of the original 62 columns. Now, it's time to clean the data.
+
+# Problem 5: Cleaning `ff_filtered`
+
+Let's see what proportion of values are missing in each column of `ff_filtered`, and how to deal with the missing values.
+
+```{r}
+na_ratio_dtype <- tibble(column_name = colnames(ff_filtered), 
+                         na_ratio = colMeans(is.na(ff_filtered)), 
+                       dtype = sapply(ff_filtered, class))
+
+'numeric' %in% na_ratio_dtype$dtype  # No column has numeric data type
+```
+
+Clearly, much of the data is missing, and there are not really any numeric data that allow for imputation. Dropping all rows with missing values is not an option. I think the best option is to first drop columns with all values missing. Then, I can create a list that contains the existent values of each column. Then, those values can be parsed and analyzed for insights.
+
+```{r}
+# Getting rid of columns with all values missing
+ff_filtered <- ff_filtered %>% 
+  select(-na_ratio_dtype$column_name[na_ratio_dtype$na_ratio == 1])
+
+# Creating a list containing non-missing values of each of the remaining 35 columns
+ff_non_na <- lapply(ff_filtered, na.omit)
+
+# Checking that there really are no missing values
+any_missing <- vector()
+for (i in 1:length(ff_non_na)) {
+  any_missing <- append(any_missing, any(is.na(ff_non_na[[i]])))
+}
+any(any_missing)  # No missing value in ff_non_na
+
+# Cleaning up unnecessary objects
+rm(list = c('i', 'any_missing'))
+```
+
+So, the final list containing the non-missing values from the 35 columns pertaining to data science skills is named `ff_non_na`. Hopefully, this list can be useful in finding some insights about which skills are valued by data science practitioners and learners.
