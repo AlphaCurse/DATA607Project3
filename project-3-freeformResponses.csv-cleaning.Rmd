@@ -18,9 +18,9 @@ According to the instructions for this project, the goal is to answer this quest
 Let's read in the data: 
 
 ```{r}
-schema <- read_csv('project-3-kaggle/schema.csv')
-mcq <- read_csv('project-3-kaggle/multipleChoiceResponses.csv')
-ff <- read_csv('project-3-kaggle/freeformResponses.csv')
+schema <- read_csv('https://raw.githubusercontent.com/AlphaCurse/DATA607Project3/main/schema.csv')
+mcq <- read_csv('https://github.com/AlphaCurse/DATA607Project3/blob/main/multipleChoiceResponses.csv?raw=true')
+ff <- read_csv('https://github.com/AlphaCurse/DATA607Project3/blob/main/freeformResponses.csv?raw=true')
 ```
 
 # Problem 1: Figuring out the questions that correspond to the columns in `ff`
