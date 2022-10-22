@@ -1,0 +1,82 @@
+---
+title: "Clean Multiple Choice Data"
+author: "Team X"
+date: "`r Sys.Date()`"
+output: html_document
+---
+## import Libraries
+Use these libraries to read and clean the data.
+```{r}
+library(tidyverse)
+```
+
+## Load the Data
+The data is loaded from the GitHub shared repository.
+```{r}
+path = 'https://raw.githubusercontent.com/AlphaCurse/DATA607Project3/main/multipleChoiceResponses.csv'
+mcr = read.csv(path, na.strings=c("", "NA"))
+head(mcr)
+```
+
+## Clean the Data
+Filter by necessary columns. 
+```{r}
+mcr1 = mcr %>%
+  select(1, 2, 3, 4, 9, 10)
+```
+
+Drop duplicated rows.
+```{r}
+mcr2 = mcr1[!duplicated(mcr), ]
+```
+
+Check for missing data.
+```{r}
+is.na(mcr2)
+```
+Create function to determine most frequent(mode) values.
+```{r}
+cal_mode = function(x){
+  dist_val = unique(x)#lists distinct/unique values
+  dist_tab = tabulate(match(x,dist_val)) #count occurances
+  dist_val[which.max(dist_tab)]
+}
+```
+
+Replace missing data with the mode of the specified column.
+```{r}
+mcr3 = mcr2 %>%
+  mutate(GenderSelect = if_else(is.na(GenderSelect),
+                                cal_mode(GenderSelect),
+                                GenderSelect))
+```
+
+```{r}
+mcr4 = mcr3 %>%
+  mutate(TitleFit = if_else(is.na(TitleFit),
+                                cal_mode(TitleFit),
+                                TitleFit))
+```
+
+Replace missing data with the median of the specified column.
+```{r}
+mcr4$Age[is.na(mcr4$Age)] = median(mcr4$Age, na.rm=TRUE)
+```
+
+Replace missing data with specified value of the specified column.
+```{r}
+mcr4$Country = mcr4$Country %>%
+  replace_na('Other')
+mcr4$CurrentJobTitleSelect = mcr4$CurrentJobTitleSelect %>%
+  replace_na('Other')
+```
+
+Verify no missing data.
+```{r}
+summary(mcr4)
+```
+
+View data to ensure changes were made.
+```{r}
+View(mcr4)
+```
